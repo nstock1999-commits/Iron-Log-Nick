@@ -66,6 +66,38 @@
     color:var(--blue);
   }
 
+  /* Tabs */
+  .tabs-container{
+    display:flex;
+    gap:4px;
+    overflow-x:auto;
+    padding:12px 14px 0;
+    border-bottom:1px solid var(--steel);
+    background:rgba(10,10,10,0.5);
+    -webkit-overflow-scrolling:touch;
+    scroll-behavior:smooth;
+  }
+  .tab-btn{
+    flex:0 0 auto;
+    background:transparent;
+    color:var(--chalk-dim);
+    border:none;
+    border-bottom:2px solid transparent;
+    padding:10px 14px;
+    font-size:0.85rem;
+    font-weight:600;
+    text-transform:uppercase;
+    letter-spacing:0.03em;
+    cursor:pointer;
+    transition:color .2s, border-color .2s;
+    white-space:nowrap;
+  }
+  .tab-btn:hover{ color:var(--chalk); }
+  .tab-btn.active{
+    color:var(--blue);
+    border-bottom-color:var(--blue);
+  }
+
   main{ max-width:640px; margin:0 auto; padding:18px 14px 0; }
 
   .add-exercise{ display:flex; gap:8px; margin-bottom:22px; }
@@ -101,13 +133,6 @@
   .btn-ghost:active{ transform:scale(0.97); }
   .btn-ghost.accent{ color:var(--blue); border-color:var(--steel-lt); }
   .btn-danger{ color:var(--pr); }
-
-  .day-divider{
-    font-size:0.72rem; text-transform:uppercase; letter-spacing:0.1em;
-    color:var(--accent); font-weight:800; margin:22px 4px 10px;
-    padding-bottom:6px; border-bottom:1px solid var(--steel);
-  }
-  .day-divider:first-child{ margin-top:0; }
 
   .empty{
     text-align:center; color:var(--chalk-dim); padding:60px 20px;
@@ -201,6 +226,8 @@
   </div>
 </header>
 
+<div class="tabs-container" id="tabsContainer"></div>
+
 <main>
   <div class="sync-panel" id="syncPanel" style="display:none;">
     <div class="sync-panel-head">
@@ -234,64 +261,35 @@
   var STORAGE_KEY = "ironlog_data_nick_v1";
   var PERSON = "Nick";
 
-  /* Seed data: Nick's program + his most recent logged sets */
   var SEED_DAYS = [
-    { day: "Monday — Legs", exercises: [
-      { name: "Squat", target: "5x6-10", sets: [
-        {weight:75, reps:10},{weight:85, reps:9},{weight:85, reps:10},{weight:85, reps:10}
-      ]},
-      { name: "Leg Press (superset → next)", target: "4x8-12", sets: [
-        {weight:217, reps:12},{weight:217, reps:12},{weight:217, reps:12},{weight:227, reps:null}
-      ]},
-      { name: "Leg Extension (superset w/ Leg Press)", target: "4x8-10", sets: [
-        {weight:30, reps:10},{weight:30, reps:10},{weight:30, reps:10},{weight:30, reps:10}
-      ]},
-      { name: "Stiff Leg Deadlift", target: "4x8-12", sets: [
-        {weight:75, reps:10},{weight:75, reps:12},{weight:75, reps:10},{weight:75, reps:8}
-      ]},
-      { name: "Leg Curl (Drop Sets)", target: "4x8-10", sets: [
-        {weight:40, reps:10},{weight:40, reps:10},{weight:42.5, reps:10},{weight:42.5, reps:10}
-      ]}
+    { dayName: "Monday", label: "Mon", exercises: [
+      { name: "Squat", target: "5x6-10", sets: [{weight:75, reps:10},{weight:85, reps:9},{weight:85, reps:10},{weight:85, reps:10}]},
+      { name: "Leg Press (superset → next)", target: "4x8-12", sets: [{weight:217, reps:12},{weight:217, reps:12},{weight:217, reps:12},{weight:227, reps:null}]},
+      { name: "Leg Extension (superset w/ Leg Press)", target: "4x8-10", sets: [{weight:30, reps:10},{weight:30, reps:10},{weight:30, reps:10},{weight:30, reps:10}]},
+      { name: "Stiff Leg Deadlift", target: "4x8-12", sets: [{weight:75, reps:10},{weight:75, reps:12},{weight:75, reps:10},{weight:75, reps:8}]},
+      { name: "Leg Curl (Drop Sets)", target: "4x8-10", sets: [{weight:40, reps:10},{weight:40, reps:10},{weight:42.5, reps:10},{weight:42.5, reps:10}]}
     ]},
-    { day: "Tuesday — Chest & Calves", exercises: [
-      { name: "Barbell Bench Press", target: "4x6-10", sets: [
-        {weight:35, reps:10},{weight:40, reps:10},{weight:40, reps:9},{weight:40, reps:8}
-      ]},
-      { name: "Incline DB Bench Press (superset → next)", target: "5x10-15", sets: [
-        {weight:20, reps:11}
-      ]},
-      { name: "Incline DB Flys (superset w/ Incline Press)", target: "5x10-15", sets: [
-        {weight:20, reps:10},{weight:20, reps:10}
-      ]},
-      { name: "Pec Dec (Drop set 3rd set)", target: "4x8-10", sets: [
-        {weight:60, reps:10},{weight:70, reps:10}
-      ]},
+    { dayName: "Tuesday", label: "Tue", exercises: [
+      { name: "Barbell Bench Press", target: "4x6-10", sets: [{weight:35, reps:10},{weight:40, reps:10},{weight:40, reps:9},{weight:40, reps:8}]},
+      { name: "Incline DB Bench Press (superset → next)", target: "5x10-15", sets: [{weight:20, reps:11}]},
+      { name: "Incline DB Flys (superset w/ Incline Press)", target: "5x10-15", sets: [{weight:20, reps:10},{weight:20, reps:10}]},
+      { name: "Pec Dec (Drop set 3rd set)", target: "4x8-10", sets: [{weight:60, reps:10},{weight:70, reps:10}]},
       { name: "Seated Calf Raise", target: "6x12-20", sets: [] }
     ]},
-    { day: "Wednesday — Shoulders", exercises: [
-      { name: "Seated Barbell Press", target: "4x6-10", sets: [
-        {weight:55, reps:10},{weight:60, reps:10},{weight:60, reps:8},{weight:60, reps:10}
-      ]},
+    { dayName: "Wednesday", label: "Wed", exercises: [
+      { name: "Seated Barbell Press", target: "4x6-10", sets: [{weight:55, reps:10},{weight:60, reps:10},{weight:60, reps:8},{weight:60, reps:10}]},
       { name: "DB Lateral Raise (Drop set last set)", target: "5x12-20", sets: [] },
       { name: "Cable Reverse Fly", target: "4x12-15", sets: [] }
     ]},
-    { day: "Thursday — Back", exercises: [
-      { name: "Lat Pull Downs", target: "4x8-12", sets: [
-        {weight:85, reps:12},{weight:90, reps:12},{weight:90, reps:12},{weight:90, reps:8}
-      ]},
-      { name: "Machine Row (Low Rows)", target: "4x8-12", sets: [
-        {weight:55, reps:12},{weight:60, reps:12},{weight:60, reps:12},{weight:68, reps:12}
-      ]},
+    { dayName: "Thursday", label: "Thu", exercises: [
+      { name: "Lat Pull Downs", target: "4x8-12", sets: [{weight:85, reps:12},{weight:90, reps:12},{weight:90, reps:12},{weight:90, reps:8}]},
+      { name: "Machine Row (Low Rows)", target: "4x8-12", sets: [{weight:55, reps:12},{weight:60, reps:12},{weight:60, reps:12},{weight:68, reps:12}]},
       { name: "Reverse Grip Lat Pull Downs (Drop Sets)", target: "4x10-15", sets: [] },
-      { name: "Barbell Shrug ss/ Bent Over Row", target: "4x10-15", sets: [
-        {weight:25, reps:12},{weight:25, reps:12},{weight:25, reps:12},{weight:25, reps:12}
-      ]}
+      { name: "Barbell Shrug ss/ Bent Over Row", target: "4x10-15", sets: [{weight:25, reps:12},{weight:25, reps:12},{weight:25, reps:12},{weight:25, reps:12}]}
     ]},
-    { day: "Friday — Arms", exercises: [
+    { dayName: "Friday", label: "Fri", exercises: [
       { name: "EZ Bar Skullcrushers", target: "4x8-12", sets: [] },
-      { name: "Cable Tricep Extensions", target: "4x10-15", sets: [
-        {weight:40, reps:15},{weight:45, reps:15},{weight:45, reps:11},{weight:45, reps:11}
-      ]},
+      { name: "Cable Tricep Extensions", target: "4x10-15", sets: [{weight:40, reps:15},{weight:45, reps:15},{weight:45, reps:11},{weight:45, reps:11}]},
       { name: "Reverse Grip Cable Tricep Ext (Drop Sets)", target: "3x12-15", sets: [] },
       { name: "EZ Bar Preacher Curls", target: "5x8-12", sets: [] },
       { name: "Standing Hammer Curl (Drop Sets)", target: "4x12-15", sets: [] }
@@ -299,6 +297,14 @@
   ];
 
   var state = load();
+  var currentDayIdx = getTodayIndex();
+
+  function getTodayIndex(){
+    var d = new Date();
+    var dayOfWeek = d.getDay();
+    var mondayIdx = dayOfWeek === 0 ? 4 : dayOfWeek - 1;
+    return Math.max(0, Math.min(4, mondayIdx));
+  }
 
   function buildSeedState(){
     var exercises = [];
@@ -307,7 +313,7 @@
         exercises.push({
           id: uid(),
           name: ex.name,
-          day: group.day,
+          dayName: group.dayName,
           target: ex.target,
           sets: (ex.sets || []).map(function(s){ return { weight: s.weight, reps: s.reps }; })
         });
@@ -420,29 +426,40 @@
     showToast._tid = setTimeout(function(){ t.classList.remove("show"); }, 1800);
   }
 
+  function renderTabs(){
+    var container = document.getElementById("tabsContainer");
+    container.innerHTML = "";
+    SEED_DAYS.forEach(function(day, idx){
+      var btn = document.createElement("button");
+      btn.className = "tab-btn" + (idx === currentDayIdx ? " active" : "");
+      btn.textContent = day.label;
+      btn.setAttribute("data-idx", idx);
+      btn.addEventListener("click", function(){
+        currentDayIdx = idx;
+        renderTabs();
+        renderExercises();
+      });
+      container.appendChild(btn);
+    });
+  }
+
   var listEl = document.getElementById("exerciseList");
 
-  function render(){
+  function renderExercises(){
     listEl.innerHTML = "";
+    var dayName = SEED_DAYS[currentDayIdx].dayName;
+    var dayExercises = state.exercises.filter(function(ex){ return ex.dayName === dayName; });
 
-    if(state.exercises.length === 0){
+    if(dayExercises.length === 0){
       var empty = document.createElement("div");
       empty.className = "empty";
-      empty.innerHTML = "<strong>No exercises yet</strong>Add one above to start logging sets.";
+      empty.innerHTML = "<strong>No exercises for this day</strong>Add one above to start logging sets.";
       listEl.appendChild(empty);
       refreshSyncPanel();
       return;
     }
 
-    var lastDay = null;
-    state.exercises.forEach(function(ex){
-      if(ex.day && ex.day !== lastDay){
-        var divider = document.createElement("div");
-        divider.className = "day-divider";
-        divider.textContent = ex.day;
-        listEl.appendChild(divider);
-        lastDay = ex.day;
-      }
+    dayExercises.forEach(function(ex){
       listEl.appendChild(renderExercise(ex));
     });
 
@@ -538,15 +555,16 @@
   function addExercise(name){
     name = (name || "").trim();
     if(!name) return;
-    state.exercises.push({ id: uid(), name: name, day: null, target: null, sets: [] });
+    var dayName = SEED_DAYS[currentDayIdx].dayName;
+    state.exercises.push({ id: uid(), name: name, dayName: dayName, target: null, sets: [] });
     save();
-    render();
+    renderExercises();
   }
 
   function deleteExercise(id){
     state.exercises = state.exercises.filter(function(ex){ return ex.id !== id; });
     save();
-    render();
+    renderExercises();
   }
 
   function addSet(id){
@@ -561,7 +579,7 @@
     ex._justPR = newBest > prevBest && prevBest > 0;
 
     save();
-    render();
+    renderExercises();
   }
 
   function deleteSet(id, idx){
@@ -569,7 +587,7 @@
     if(!ex) return;
     ex.sets.splice(idx, 1);
     save();
-    render();
+    renderExercises();
   }
 
   function updateSetField(id, idx, field, rawValue){
@@ -579,7 +597,7 @@
     if(num !== null && isNaN(num)) num = null;
     ex.sets[idx][field] = num;
     save();
-    render();
+    renderExercises();
   }
 
   document.getElementById("addExerciseBtn").addEventListener("click", function(){
@@ -645,7 +663,8 @@
     }
   });
 
-  render();
+  renderTabs();
+  renderExercises();
 })();
 </script>
 
