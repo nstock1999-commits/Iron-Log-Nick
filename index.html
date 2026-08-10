@@ -66,7 +66,6 @@
     color:var(--blue);
   }
 
-  /* Tabs */
   .tabs-container{
     display:flex;
     gap:4px;
@@ -259,40 +258,41 @@
   "use strict";
 
   var STORAGE_KEY = "ironlog_data_nick_v1";
+  var OLD_STORAGE_KEY = "ironlog_data_nick_v1_old";
   var PERSON = "Nick";
 
   var SEED_DAYS = [
     { dayName: "Monday", label: "Mon", exercises: [
-      { name: "Squat", target: "5x6-10", sets: [{weight:75, reps:10},{weight:85, reps:9},{weight:85, reps:10},{weight:85, reps:10}]},
-      { name: "Leg Press (superset → next)", target: "4x8-12", sets: [{weight:217, reps:12},{weight:217, reps:12},{weight:217, reps:12},{weight:227, reps:null}]},
-      { name: "Leg Extension (superset w/ Leg Press)", target: "4x8-10", sets: [{weight:30, reps:10},{weight:30, reps:10},{weight:30, reps:10},{weight:30, reps:10}]},
-      { name: "Stiff Leg Deadlift", target: "4x8-12", sets: [{weight:75, reps:10},{weight:75, reps:12},{weight:75, reps:10},{weight:75, reps:8}]},
-      { name: "Leg Curl (Drop Sets)", target: "4x8-10", sets: [{weight:40, reps:10},{weight:40, reps:10},{weight:42.5, reps:10},{weight:42.5, reps:10}]}
+      { name: "Squat", target: "5x6-10" },
+      { name: "Leg Press (superset → next)", target: "4x8-12" },
+      { name: "Leg Extension (superset w/ Leg Press)", target: "4x8-10" },
+      { name: "Stiff Leg Deadlift", target: "4x8-12" },
+      { name: "Leg Curl (Drop Sets)", target: "4x8-10" }
     ]},
     { dayName: "Tuesday", label: "Tue", exercises: [
-      { name: "Barbell Bench Press", target: "4x6-10", sets: [{weight:35, reps:10},{weight:40, reps:10},{weight:40, reps:9},{weight:40, reps:8}]},
-      { name: "Incline DB Bench Press (superset → next)", target: "5x10-15", sets: [{weight:20, reps:11}]},
-      { name: "Incline DB Flys (superset w/ Incline Press)", target: "5x10-15", sets: [{weight:20, reps:10},{weight:20, reps:10}]},
-      { name: "Pec Dec (Drop set 3rd set)", target: "4x8-10", sets: [{weight:60, reps:10},{weight:70, reps:10}]},
-      { name: "Seated Calf Raise", target: "6x12-20", sets: [] }
+      { name: "Barbell Bench Press", target: "4x6-10" },
+      { name: "Incline DB Bench Press (superset → next)", target: "5x10-15" },
+      { name: "Incline DB Flys (superset w/ Incline Press)", target: "5x10-15" },
+      { name: "Pec Dec (Drop set 3rd set)", target: "4x8-10" },
+      { name: "Seated Calf Raise", target: "6x12-20" }
     ]},
     { dayName: "Wednesday", label: "Wed", exercises: [
-      { name: "Seated Barbell Press", target: "4x6-10", sets: [{weight:55, reps:10},{weight:60, reps:10},{weight:60, reps:8},{weight:60, reps:10}]},
-      { name: "DB Lateral Raise (Drop set last set)", target: "5x12-20", sets: [] },
-      { name: "Cable Reverse Fly", target: "4x12-15", sets: [] }
+      { name: "Seated Barbell Press", target: "4x6-10" },
+      { name: "DB Lateral Raise (Drop set last set)", target: "5x12-20" },
+      { name: "Cable Reverse Fly", target: "4x12-15" }
     ]},
     { dayName: "Thursday", label: "Thu", exercises: [
-      { name: "Lat Pull Downs", target: "4x8-12", sets: [{weight:85, reps:12},{weight:90, reps:12},{weight:90, reps:12},{weight:90, reps:8}]},
-      { name: "Machine Row (Low Rows)", target: "4x8-12", sets: [{weight:55, reps:12},{weight:60, reps:12},{weight:60, reps:12},{weight:68, reps:12}]},
-      { name: "Reverse Grip Lat Pull Downs (Drop Sets)", target: "4x10-15", sets: [] },
-      { name: "Barbell Shrug ss/ Bent Over Row", target: "4x10-15", sets: [{weight:25, reps:12},{weight:25, reps:12},{weight:25, reps:12},{weight:25, reps:12}]}
+      { name: "Lat Pull Downs", target: "4x8-12" },
+      { name: "Machine Row (Low Rows)", target: "4x8-12" },
+      { name: "Reverse Grip Lat Pull Downs (Drop Sets)", target: "4x10-15" },
+      { name: "Barbell Shrug ss/ Bent Over Row", target: "4x10-15" }
     ]},
     { dayName: "Friday", label: "Fri", exercises: [
-      { name: "EZ Bar Skullcrushers", target: "4x8-12", sets: [] },
-      { name: "Cable Tricep Extensions", target: "4x10-15", sets: [{weight:40, reps:15},{weight:45, reps:15},{weight:45, reps:11},{weight:45, reps:11}]},
-      { name: "Reverse Grip Cable Tricep Ext (Drop Sets)", target: "3x12-15", sets: [] },
-      { name: "EZ Bar Preacher Curls", target: "5x8-12", sets: [] },
-      { name: "Standing Hammer Curl (Drop Sets)", target: "4x12-15", sets: [] }
+      { name: "EZ Bar Skullcrushers", target: "4x8-12" },
+      { name: "Cable Tricep Extensions", target: "4x10-15" },
+      { name: "Reverse Grip Cable Tricep Ext (Drop Sets)", target: "3x12-15" },
+      { name: "EZ Bar Preacher Curls", target: "5x8-12" },
+      { name: "Standing Hammer Curl (Drop Sets)", target: "4x12-15" }
     ]}
   ];
 
@@ -306,6 +306,34 @@
     return Math.max(0, Math.min(4, mondayIdx));
   }
 
+  function migrateOldData(){
+    try{
+      var oldRaw = localStorage.getItem(OLD_STORAGE_KEY);
+      if(oldRaw){
+        var oldData = JSON.parse(oldRaw);
+        if(oldData && oldData.exercises){
+          oldData.exercises.forEach(function(ex){
+            var matchedDay = null;
+            SEED_DAYS.forEach(function(day){
+              day.exercises.forEach(function(seedEx){
+                if(seedEx.name === ex.name){
+                  matchedDay = day.dayName;
+                }
+              });
+            });
+            if(matchedDay){
+              ex.dayName = matchedDay;
+            } else {
+              ex.dayName = SEED_DAYS[0].dayName;
+            }
+          });
+          return oldData;
+        }
+      }
+    }catch(e){}
+    return null;
+  }
+
   function buildSeedState(){
     var exercises = [];
     SEED_DAYS.forEach(function(group){
@@ -315,7 +343,7 @@
           name: ex.name,
           dayName: group.dayName,
           target: ex.target,
-          sets: (ex.sets || []).map(function(s){ return { weight: s.weight, reps: s.reps }; })
+          sets: []
         });
       });
     });
@@ -325,10 +353,18 @@
   function load(){
     try{
       var raw = localStorage.getItem(STORAGE_KEY);
-      if(!raw) return buildSeedState();
-      var parsed = JSON.parse(raw);
-      if(!parsed || !Array.isArray(parsed.exercises)) return buildSeedState();
-      return parsed;
+      if(raw){
+        var parsed = JSON.parse(raw);
+        if(parsed && Array.isArray(parsed.exercises)){
+          var hasDayNames = parsed.exercises.some(function(ex){ return ex.dayName; });
+          if(hasDayNames) return parsed;
+        }
+      }
+      
+      var migrated = migrateOldData();
+      if(migrated) return migrated;
+      
+      return buildSeedState();
     }catch(e){
       console.warn("IronLog: could not read saved data, starting fresh.", e);
       return buildSeedState();
