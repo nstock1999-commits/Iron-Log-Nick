@@ -130,7 +130,6 @@
     padding:9px 14px; font-size:0.82rem;
   }
   .btn-ghost:active{ transform:scale(0.97); }
-  .btn-ghost.accent{ color:var(--blue); border-color:var(--steel-lt); }
   .btn-danger{ color:var(--pr); }
 
   .empty{
@@ -191,16 +190,6 @@
   .exercise-actions{ display:flex; gap:8px; padding:0 14px 14px; flex-wrap:wrap; }
   .exercise-actions .btn-ghost{ flex:1; text-align:center; min-width:120px; }
 
-  .sync-panel{ background:var(--surface); border:1px solid var(--steel); border-radius:var(--radius); padding:14px; margin-bottom:22px; }
-  .sync-panel-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; }
-  .sync-title{ font-size:0.85rem; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:var(--accent); }
-  .sync-desc{ font-size:0.76rem; color:var(--chalk-dim); line-height:1.5; margin:0 0 10px; }
-  textarea{
-    width:100%; min-height:90px; resize:vertical;
-    background:var(--surface-2); border:1px solid var(--steel); color:var(--chalk);
-    border-radius:8px; padding:10px; font-size:0.78rem;
-    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-  }
   .toast{
     position:fixed; left:50%; bottom:22px; transform:translateX(-50%) translateY(20px);
     background:linear-gradient(90deg, var(--blue), var(--accent));
@@ -218,29 +207,15 @@
 
 <header>
   <div class="brand"><h1>IRON<span></span>LOG</h1></div>
-  <p class="tagline">Log it. Lift it. Beat it next time.</p>
+  <p class="tagline">DAPRE Protocol • Shaun's 30-Min Split</p>
   <div class="header-row">
     <div class="owner-badge">Nick's Log</div>
-    <button class="btn-ghost accent" id="toggleSyncBtn">Sync to Sheet</button>
   </div>
 </header>
 
 <div class="tabs-container" id="tabsContainer"></div>
 
 <main>
-  <div class="sync-panel" id="syncPanel" style="display:none;">
-    <div class="sync-panel-head">
-      <div class="sync-title">History Log Export</div>
-      <button class="btn-ghost" id="copySyncBtn">Copy All</button>
-    </div>
-    <p class="sync-desc">
-      Paste these rows straight into the <strong>History Log</strong> tab of the
-      "CURRENT WORKOUT PROGRAM" Google Sheet (columns: Date, Person, Exercise, Set1 Wt, Set1 Reps, Best 1RM, Suggested Next).
-      Only exercises with at least one logged set are included, using each one's most recent set.
-    </p>
-    <textarea id="syncTextarea" readonly placeholder="Log a set to generate export rows..."></textarea>
-  </div>
-
   <div class="add-exercise">
     <input type="text" id="newExerciseInput" placeholder="Exercise name (e.g. Squat)" autocomplete="off">
     <button class="btn-primary" id="addExerciseBtn">Add</button>
@@ -249,7 +224,7 @@
   <div id="exerciseList"></div>
 </main>
 
-<footer>Everything here stays on this device — nothing leaves your browser until you copy it.</footer>
+<footer>DAPRE progression. All data stays on your device. Log it. Lift it. Beat it next time.</footer>
 
 <div class="toast" id="toast"></div>
 
@@ -258,8 +233,6 @@
   "use strict";
 
   var STORAGE_KEY = "ironlog_data_nick_v1";
-  var OLD_STORAGE_KEY = "ironlog_data_nick_v1_old";
-  var PERSON = "Nick";
 
   var SEED_DAYS = [
     { dayName: "Monday", label: "Mon", exercises: [
@@ -308,26 +281,24 @@
 
   function migrateOldData(){
     try{
-      var oldRaw = localStorage.getItem(OLD_STORAGE_KEY);
-      if(oldRaw){
-        var oldData = JSON.parse(oldRaw);
-        if(oldData && oldData.exercises){
-          oldData.exercises.forEach(function(ex){
-            var matchedDay = null;
-            SEED_DAYS.forEach(function(day){
-              day.exercises.forEach(function(seedEx){
-                if(seedEx.name === ex.name){
-                  matchedDay = day.dayName;
-                }
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if(raw){
+        var data = JSON.parse(raw);
+        if(data && data.exercises){
+          data.exercises.forEach(function(ex){
+            if(!ex.dayName){
+              var matchedDay = null;
+              SEED_DAYS.forEach(function(day){
+                day.exercises.forEach(function(seedEx){
+                  if(seedEx.name === ex.name){
+                    matchedDay = day.dayName;
+                  }
+                });
               });
-            });
-            if(matchedDay){
-              ex.dayName = matchedDay;
-            } else {
-              ex.dayName = SEED_DAYS[0].dayName;
+              ex.dayName = matchedDay || SEED_DAYS[0].dayName;
             }
           });
-          return oldData;
+          return data;
         }
       }
     }catch(e){}
@@ -352,28 +323,17 @@
 
   function load(){
     try{
-      var raw = localStorage.getItem(STORAGE_KEY);
-      if(raw){
-        var parsed = JSON.parse(raw);
-        if(parsed && Array.isArray(parsed.exercises)){
-          var hasDayNames = parsed.exercises.some(function(ex){ return ex.dayName; });
-          if(hasDayNames) return parsed;
-        }
-      }
-      
       var migrated = migrateOldData();
       if(migrated) return migrated;
-      
       return buildSeedState();
     }catch(e){
-      console.warn("IronLog: could not read saved data, starting fresh.", e);
       return buildSeedState();
     }
   }
 
   function save(){
     try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
-    catch(e){ console.warn("IronLog: could not save data.", e); }
+    catch(e){}
   }
 
   function uid(){
@@ -398,68 +358,18 @@
     return Math.max(0, Math.round(n / 2.5) * 2.5);
   }
 
-  function predictNextWeight(sets){
-    if(sets.length === 0) return null;
-    var last = sets[sets.length - 1];
-    if(!last.weight || !last.reps) return null;
-
-    var best1RM = bestE1RM(sets);
-    var increment = 5;
-
-    var raw;
-    if(last.reps >= 12){
-      raw = last.weight + increment;
-    } else if(last.reps < 6 && sets.length > 1){
-      raw = last.weight - increment;
-    } else {
-      raw = last.weight;
-    }
-
-    if(best1RM > 0){
-      var ceiling = best1RM * 0.97 / (1 + last.reps / 30);
-      if(raw > ceiling) raw = ceiling;
-    }
-
-    return round2half(raw);
-  }
-
-  function todayStr(){
-    var d = new Date();
-    return (d.getMonth()+1) + "/" + d.getDate() + "/" + d.getFullYear();
-  }
-
-  function buildSyncRows(){
-    var rows = [];
-    state.exercises.forEach(function(ex){
-      if(ex.sets.length === 0) return;
-      var last = ex.sets[ex.sets.length - 1];
-      if(!last.weight || !last.reps) return;
-      var best1RM = bestE1RM(ex.sets);
-      var suggested = predictNextWeight(ex.sets);
-      rows.push([
-        todayStr(),
-        PERSON,
-        ex.name,
-        last.weight,
-        last.reps,
-        best1RM > 0 ? Math.round(best1RM * 10) / 10 : "",
-        suggested !== null ? suggested : ""
-      ].join("\t"));
-    });
-    return rows.join("\n");
-  }
-
-  function refreshSyncPanel(){
-    var ta = document.getElementById("syncTextarea");
-    ta.value = buildSyncRows();
-  }
-
-  function showToast(msg){
-    var t = document.getElementById("toast");
-    t.textContent = msg;
-    t.classList.add("show");
-    clearTimeout(showToast._tid);
-    showToast._tid = setTimeout(function(){ t.classList.remove("show"); }, 1800);
+  function dapre(weight, reps){
+    if(!weight || reps === null) return null;
+    if(reps >= 16) return round2half(weight + 10);
+    if(reps === 15) return round2half(weight + 7.5);
+    if(reps >= 13) return round2half(weight + 5);
+    if(reps >= 10) return round2half(weight + 2.5);
+    if(reps === 9) return weight;
+    if(reps === 8) return weight;
+    if(reps >= 6) return round2half(weight - 2.5);
+    if(reps === 5) return round2half(weight - 5);
+    if(reps < 5) return round2half(weight - 5);
+    return weight;
   }
 
   function renderTabs(){
@@ -491,15 +401,12 @@
       empty.className = "empty";
       empty.innerHTML = "<strong>No exercises for this day</strong>Add one above to start logging sets.";
       listEl.appendChild(empty);
-      refreshSyncPanel();
       return;
     }
 
     dayExercises.forEach(function(ex){
       listEl.appendChild(renderExercise(ex));
     });
-
-    refreshSyncPanel();
   }
 
   function renderExercise(ex){
@@ -549,16 +456,17 @@
     table.appendChild(tbody);
     card.appendChild(table);
 
-    var predicted = predictNextWeight(ex.sets);
+    var lastSet = ex.sets.length > 0 ? ex.sets[ex.sets.length - 1] : null;
+    var nextWeight = lastSet && lastSet.weight && lastSet.reps !== null ? dapre(lastSet.weight, lastSet.reps) : null;
     var predictRow = document.createElement("div");
     predictRow.className = "predict-row";
-    if(predicted !== null){
+    if(nextWeight !== null){
       predictRow.innerHTML =
-        '<div><div class="predict-label">Predicted next set</div>' +
-        '<div class="predict-note">from last set + current 1RM</div></div>' +
-        '<div class="predict-value">' + predicted + ' lb</div>';
+        '<div><div class="predict-label">DAPRE Next Weight</div>' +
+        '<div class="predict-note">Based on reps achieved</div></div>' +
+        '<div class="predict-value">' + nextWeight + ' lb</div>';
     } else {
-      predictRow.innerHTML = '<div class="predict-label">Log a set to see a weight prediction for the next one.</div>';
+      predictRow.innerHTML = '<div class="predict-label">Log a set to see DAPRE recommendation.</div>';
     }
     card.appendChild(predictRow);
 
@@ -566,7 +474,7 @@
     actions.className = "exercise-actions";
     var addSetBtn = document.createElement("button");
     addSetBtn.className = "btn-ghost";
-    addSetBtn.textContent = predicted !== null ? "Add Set (" + predicted + " lb)" : "Add Set";
+    addSetBtn.textContent = nextWeight !== null ? "Add Set (" + nextWeight + " lb)" : "Add Set";
     addSetBtn.setAttribute("data-action", "add-set");
     addSetBtn.setAttribute("data-id", ex.id);
     actions.appendChild(addSetBtn);
@@ -606,10 +514,11 @@
   function addSet(id){
     var ex = findExercise(id);
     if(!ex) return;
-    var predicted = predictNextWeight(ex.sets);
+    var lastSet = ex.sets.length > 0 ? ex.sets[ex.sets.length - 1] : null;
+    var predictedWeight = lastSet && lastSet.weight && lastSet.reps !== null ? dapre(lastSet.weight, lastSet.reps) : null;
     var prevBest = bestE1RM(ex.sets);
 
-    ex.sets.push({ weight: predicted !== null ? predicted : null, reps: null });
+    ex.sets.push({ weight: predictedWeight !== null ? predictedWeight : null, reps: null });
 
     var newBest = bestE1RM(ex.sets);
     ex._justPR = newBest > prevBest && prevBest > 0;
@@ -648,29 +557,6 @@
       addExercise(this.value);
       this.value = "";
     }
-  });
-
-  document.getElementById("toggleSyncBtn").addEventListener("click", function(){
-    var panel = document.getElementById("syncPanel");
-    var visible = panel.style.display !== "none";
-    panel.style.display = visible ? "none" : "block";
-    if(!visible) refreshSyncPanel();
-  });
-
-  document.getElementById("copySyncBtn").addEventListener("click", function(){
-    var ta = document.getElementById("syncTextarea");
-    ta.select();
-    ta.setSelectionRange(0, 999999);
-    var copied = false;
-    try{
-      if(navigator.clipboard && navigator.clipboard.writeText){
-        navigator.clipboard.writeText(ta.value);
-        copied = true;
-      } else {
-        copied = document.execCommand("copy");
-      }
-    }catch(e){ copied = false; }
-    showToast(copied ? "Copied — paste into History Log" : "Select the text above and copy manually");
   });
 
   listEl.addEventListener("click", function(e){
