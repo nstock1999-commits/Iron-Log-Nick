@@ -374,7 +374,7 @@
   <p class="tagline">DAPRE Protocol • Upper / Lower / Push / Pull / Legs</p>
   <div class="header-row">
     <div class="owner-badge">Nick's Log</div>
-    <button class="partner-toggle" id="partnerToggle" type="button">View Sandy &rarr;</button>
+    <button class="partner-toggle" id="partnerToggle" type="button">Log for Sandy &rarr;</button>
   </div>
 </header>
 
@@ -877,10 +877,16 @@
 
   var syncTimer = null;
 
-  function save(){
-    // Local write always happens first and is never gated on the network.
+  function persistLocal(){
     try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
     catch(e){}
+  }
+
+  function save(){
+    // Stamped so another device can tell whose copy is newer.
+    state.updatedAt = new Date().toISOString();
+    // Local write always happens first and is never gated on the network.
+    persistLocal();
     scheduleCloudBackup();
   }
 
@@ -1031,14 +1037,84 @@
   var partnerState = null;
   var partnerStatus = "idle";   // idle | loading | ok | empty | error
   var partnerUpdatedAt = null;
+  // The record stamp this view was built from, sent back so the server can
+  // reject a write that would clobber a newer one.
+  var partnerBaseUpdatedAt = null;
 
-  function isReadOnly(){ return viewMode === "partner"; }
+  function isPartnerView(){ return viewMode === "partner"; }
+
+  // Sandy's log is editable from here -- Nick logs on her behalf when she
+  // forgets or he is spotting. Only block while her data has not loaded.
+  function isReadOnly(){ return isPartnerView() && !partnerState; }
+
+  function activeState(){ return isPartnerView() ? partnerState : state; }
+
+  // Route writes to whichever log is on screen.
+  function saveActive(){
+    if(isPartnerView()) savePartner();
+    else save();
+  }
+
+  var partnerSaveTimer = null;
+
+  function savePartner(){
+    if(!partnerState) return;
+    partnerState.updatedAt = new Date().toISOString();
+    if(partnerSaveTimer) clearTimeout(partnerSaveTimer);
+    partnerSaveTimer = setTimeout(pushPartner, 700);
+  }
+
+  function pushPartner(){
+    partnerSaveTimer = null;
+    if(!partnerState || !PARTNER) return;
+    var base = partnerBaseUpdatedAt;
+
+    fetch(PARTNER.url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        person: PARTNER.key,
+        updatedAt: partnerState.updatedAt,
+        baseUpdatedAt: base,
+        state: partnerState
+      })
+    })
+      .then(function(res){
+        if(res.status === 409){
+          // She logged something on her own phone since this view loaded.
+          // Reload rather than overwrite her with a stale copy.
+          toast(PARTNER.label + " logged on her phone — reloading her log");
+          loadPartner();
+          return null;
+        }
+        if(!res.ok) throw new Error("HTTP " + res.status);
+        return res.json();
+      })
+      .then(function(body){
+        if(body && body.updatedAt) partnerBaseUpdatedAt = body.updatedAt;
+      })
+      .catch(function(){
+        setPartnerNote("Could not save to " + PARTNER.label + "'s log — check signal.");
+      });
+  }
+
+  function setPartnerNote(msg){
+    var el = document.getElementById("partnerBanner");
+    if(el) el.innerHTML = "<strong>Editing:</strong> " + escapeHtml(msg);
+  }
 
   function activeExercises(){
-    if(viewMode === "partner"){
-      return (partnerState && Array.isArray(partnerState.exercises)) ? partnerState.exercises : [];
-    }
-    return state.exercises;
+    var st = activeState();
+    return (st && Array.isArray(st.exercises)) ? st.exercises : [];
+  }
+
+  // Her log is hers: tidy the shape, but never reconcile it against this app's
+  // program or targets. Only her own app owns those.
+  function normalizePartnerState(data){
+    if(!data || !Array.isArray(data.exercises)) return null;
+    data.exercises.forEach(normalizeExercise);
+    if(!data.lastActiveDate) data.lastActiveDate = todayKey();
+    return data;
   }
 
   function loadPartner(){
@@ -1058,7 +1134,8 @@
           partnerStatus = "empty";
         } else {
           incoming.exercises.forEach(normalizeExercise);
-          partnerState = incoming;
+          partnerState = normalizePartnerState(incoming) || incoming;
+          partnerBaseUpdatedAt = (body && body.updatedAt) || null;
           partnerStatus = "ok";
         }
         render();
@@ -1120,7 +1197,7 @@
     if(partnerBtn){
       partnerBtn.textContent = viewMode === "partner"
         ? "← Back to My Log"
-        : "View " + PARTNER.label + " →";
+        : "Log for " + PARTNER.label + " →";
       partnerBtn.classList.toggle("is-active", viewMode === "partner");
     }
     if(addRowEl){
@@ -1137,7 +1214,7 @@
         else if(partnerStatus === "error") note = "Could not reach " + PARTNER.label + "'s log.";
         else if(partnerStatus === "empty") note = "No cloud data yet — " + PARTNER.label + " needs to open her app and log once.";
         else if(partnerStatus === "ok" && partnerUpdatedAt) note = "Last synced " + escapeHtml(new Date(partnerUpdatedAt).toLocaleString());
-        bannerEl.innerHTML = "<strong>Read-only:</strong> " + escapeHtml(PARTNER.label) + "'s log. " + note;
+        bannerEl.innerHTML = "<strong>Editing:</strong> " + escapeHtml(PARTNER.label) + "'s log — changes save to her app. " + note;
       }
     }
   }
@@ -1167,7 +1244,9 @@
     if(!readOnly){
       var filled = false;
       dayExercises.forEach(function(ex){ if(prefillSets(ex)) filled = true; });
-      if(filled) save();
+      // Only persist for your own log. Laying out sets in her view is a
+      // convenience, not an edit -- it saves once he actually logs a rep.
+      if(filled && !isPartnerView()) save();
     }
 
     dayExercises.forEach(function(ex){
@@ -1274,8 +1353,9 @@
   /* ------------------------------------------------------------------ */
 
   function findExercise(id){
-    for(var i=0;i<state.exercises.length;i++){
-      if(state.exercises[i].id === id) return state.exercises[i];
+    var list = activeExercises();
+    for(var i=0;i<list.length;i++){
+      if(list[i].id === id) return list[i];
     }
     return null;
   }
@@ -1286,14 +1366,14 @@
     if(!name) return;
     var dayName = SEED_DAYS[currentDayIdx].dayName;
     state.exercises.push({ id: uid(), name: name, dayName: dayName, target: null, sets: [], history: [] });
-    save();
+    saveActive();
     renderExercises();
   }
 
   function deleteExercise(id){
     if(isReadOnly()) return;
     state.exercises = state.exercises.filter(function(ex){ return ex.id !== id; });
-    save();
+    saveActive();
     renderExercises();
   }
 
@@ -1309,7 +1389,7 @@
     var newBest = bestE1RM(ex.sets);
     ex._justPR = newBest > prevBest && prevBest > 0;
 
-    save();
+    saveActive();
     renderExercises();
   }
 
@@ -1318,7 +1398,7 @@
     var ex = findExercise(id);
     if(!ex) return;
     ex.sets.splice(idx, 1);
-    save();
+    saveActive();
     renderExercises();
   }
 
@@ -1329,7 +1409,7 @@
     var num = rawValue === "" ? null : parseFloat(rawValue);
     if(num !== null && isNaN(num)) num = null;
     ex.sets[idx][field] = num;
-    save();
+    saveActive();
     renderExercises();
   }
 
@@ -1867,32 +1947,44 @@
     return n;
   }
 
-  // If this browser has no work but the cloud does, the local copy was lost --
-  // a cleared cache, a new device, a reinstalled app. Pull it back rather than
-  // leaving the lifter staring at an empty program.
-  function restoreFromCloudIfEmpty(){
+  // Pull the cloud copy whenever it is newer than this device's. That covers a
+  // cleared browser or a new phone, and -- because both apps write to the same
+  // per-person record -- sets logged on your behalf from the other app.
+  var pullInFlight = false;
+
+  function syncFromCloud(onDone){
     try{
-      if(typeof fetch !== "function") return;
-      if(countWork(state) > 0) return;
+      if(typeof fetch !== "function" || pullInFlight) return;
+      pullInFlight = true;
 
       fetch(SYNC_URL, { cache: "no-store" })
         .then(function(res){ return res.ok ? res.json() : null; })
         .then(function(body){
-          if(!body) return;
-          var incoming = body.state || null;
-          if(!incoming || countWork(incoming) === 0) return;
-          if(countWork(state) > 0) return;   // something got logged while we waited
+          var incoming = body && body.state ? body.state : null;
+          if(!incoming) return;
 
-          var restored = normalizeState(incoming);
-          if(!restored) return;
-          state = restored;
-          save();
+          var remoteWork = countWork(incoming);
+          if(remoteWork === 0) return;              // nothing worth adopting
+
+          var remoteAt = incoming.updatedAt || body.updatedAt || null;
+          var localAt = state.updatedAt || null;
+          var adopt = countWork(state) === 0 ||     // this device has nothing
+                      !localAt ||                    // never stamped locally
+                      (remoteAt && remoteAt > localAt);
+          if(!adopt) return;
+
+          var next = normalizeState(incoming);
+          if(!next) return;
+
+          state = next;
+          persistLocal();          // adopt as-is; restamping would bounce it back
           renderTabs();
           render();
-          toast("Restored " + countWork(state) + " entries from cloud backup");
+          if(onDone) onDone(remoteWork);
         })
-        .catch(function(){});
-    }catch(e){}
+        .catch(function(){})
+        .then(function(){ pullInFlight = false; });
+    }catch(e){ pullInFlight = false; }
   }
 
   /* ------------------------------------------------------------------ */
@@ -1955,7 +2047,9 @@
   }
 
   document.addEventListener("visibilitychange", function(){
-    if(!document.hidden) checkRollover();
+    if(document.hidden) return;
+    checkRollover();
+    syncFromCloud(function(n){ toast("Synced " + n + " entries from your other device"); });
   });
 
   // Roll yesterday's work into history before the first paint, and persist a
@@ -1966,7 +2060,7 @@
   wireReminders();
   renderTabs();
   render();
-  restoreFromCloudIfEmpty();
+  syncFromCloud();
 })();
 </script>
 
